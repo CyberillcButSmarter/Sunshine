@@ -124,6 +124,11 @@ if(LIBVA_FOUND)
             "${CMAKE_SOURCE_DIR}/src/platform/linux/vaapi.cpp")
 endif()
 
+# rkmpp (Rockchip MPP encoder)
+if(SUNSHINE_ENABLE_ROCKCHIP)
+    add_compile_definitions(SUNSHINE_BUILD_ROCKCHIP)
+endif()
+
 # vulkan video encoding (via FFmpeg)
 if(${SUNSHINE_ENABLE_VULKAN})
     if(NOT SUNSHINE_SYSTEM_VULKAN_HEADERS)

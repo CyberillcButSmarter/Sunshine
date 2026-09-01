@@ -1246,6 +1246,61 @@ namespace video {
     LIMITED_GOP_SIZE | PARALLEL_ENCODING | NO_RC_BUF_LIMIT
   };
 
+  #ifdef SUNSHINE_BUILD_ROCKCHIP
+  /**
+   * @brief Rockchip MPP.
+   *
+   * Frames are captured and color-converted on the CPU, then handed to FFmpeg's
+   * software-attached rkmpp encoder. This is not a zero-copy DRM_PRIME path, so
+   * capture/conversion still costs CPU time; only the actual encode is offloaded
+   * to the Rockchip VPU.
+   */
+  encoder_t rkmpp {
+    "rkmpp"sv,
+    std::make_unique<encoder_platform_formats_avcodec>(
+      AV_HWDEVICE_TYPE_NONE,
+      AV_HWDEVICE_TYPE_NONE,
+      AV_PIX_FMT_NONE,
+      AV_PIX_FMT_NV12,
+      AV_PIX_FMT_NONE,  // rkmpp doesn't support 10-bit encoding
+      AV_PIX_FMT_NONE,  // rkmpp doesn't support YUV444 encoding
+      AV_PIX_FMT_NONE,  // rkmpp doesn't support YUV444 encoding
+      nullptr
+    ),
+    {
+      // rkmpp has no AV1 encoder
+      {},
+      {},  // SDR-specific options
+      {},  // HDR-specific options
+      {},  // YUV444 SDR-specific options
+      {},  // YUV444 HDR-specific options
+      {},  // Fallback options
+      {},
+    },
+    {
+      // rkmpp doesn't expose tunables like presets, so options are left blank
+      {},
+      {},  // SDR-specific options
+      {},  // HDR-specific options
+      {},  // YUV444 SDR-specific options
+      {},  // YUV444 HDR-specific options
+      {},  // Fallback options
+      "hevc_rkmpp"s,
+    },
+    {
+      // Common options
+      {},
+      {},  // SDR-specific options
+      {},  // HDR-specific options
+      {},  // YUV444 SDR-specific options
+      {},  // YUV444 HDR-specific options
+      {},  // Fallback options
+      "h264_rkmpp"s,
+    },
+    PARALLEL_ENCODING | ALWAYS_REPROBE
+  };
+  #endif  // SUNSHINE_BUILD_ROCKCHIP
+
   #ifdef SUNSHINE_BUILD_VULKAN
   encoder_t vulkan {
     "vulkan"sv,
@@ -1407,6 +1462,9 @@ namespace video {
     &vulkan,
   #endif
     &vaapi,
+  #ifdef SUNSHINE_BUILD_ROCKCHIP
+    &rkmpp,
+  #endif
 #endif
 #ifdef __APPLE__
     &videotoolbox,

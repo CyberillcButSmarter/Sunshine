@@ -84,6 +84,54 @@ Sunshine requires CUDA Toolkit for NVFBC capture. There are two caveats to CUDA:
 > To install older versions, select the appropriate run file based on your desired CUDA version and architecture
 > according to [CUDA Toolkit Archive](https://developer.nvidia.com/cuda-toolkit-archive)
 
+##### Rockchip MPP (rkmpp) encoder
+
+Rockchip SoCs (e.g. RK3588/RK3588S) can use their VPU for hardware encoding via FFmpeg's `rkmpp` encoder, enabled with
+`-DSUNSHINE_ENABLE_ROCKCHIP=ON`. This is a CPU-fed encode path: display capture and color conversion still run on the
+CPU (via the existing KMS/X11 capture code), and only the H.264/HEVC encode step is offloaded to the VPU. AV1 and
+10-bit encoding are not supported by rkmpp.
+
+Two extra pieces are required beyond the normal Linux dependencies, since none of this is part of upstream FFmpeg or
+LizardByte's prebuilt FFmpeg binaries:
+
+1. `librockchip_mpp` and `librga`, built from source:
+
+   ```bash
+   git clone https://github.com/HermanChen/mpp.git rkmpp
+   cd rkmpp && mkdir build && cd build
+   cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DBUILD_TEST=OFF ..
+   sudo make -j"$(nproc)" install
+   cd ../..
+
+   git clone -b jellyfin-rga --depth=1 https://github.com/nyanmisaka/rk-mirrors.git rkrga
+   cd rkrga
+   meson setup ./ rkrga_build --prefix=/usr --libdir=lib --buildtype=release \
+     -Dcpp_args=-fpermissive -Dlibdrm=false -Dlibrga_demo=false
+   sudo ninja -C rkrga_build install
+   ```
+
+2. An FFmpeg build with `--enable-rkmpp` (and rga support), pointed to via `FFMPEG_PREPARED_BINARIES`. LizardByte's
+   prebuilt FFmpeg does not include rkmpp, so `SUNSHINE_ENABLE_ROCKCHIP` requires you to supply your own build, e.g.
+   the one from [lvxingye/build-deps](https://github.com/lvxingye/build-deps):
+
+   ```bash
+   wget https://github.com/lvxingye/build-deps/releases/download/ubuntu-20.04/ffmpeg.tar.gz
+   tar -xf ffmpeg.tar.gz
+   mv ffmpeg_build _deps/ffmpeg
+   ```
+
+Then configure with:
+
+```bash
+cmake -B build -G Ninja -S . \
+  -DSUNSHINE_ENABLE_ROCKCHIP=ON \
+  -DSUNSHINE_ENABLE_CUDA=OFF \
+  -DFFMPEG_PREPARED_BINARIES="$(pwd)/_deps/ffmpeg"
+```
+
+Once built, select the `rkmpp` encoder either in the web UI (Advanced tab) or by setting `encoder = rkmpp` in
+`sunshine.conf`.
+
 #### macOS
 You can either use [Homebrew](https://brew.sh) or [MacPorts](https://www.macports.org) to install dependencies.
 

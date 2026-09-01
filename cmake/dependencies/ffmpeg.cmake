@@ -4,6 +4,13 @@
 include_guard(GLOBAL)
 
 # ffmpeg pre-compiled binaries
+if(SUNSHINE_ENABLE_ROCKCHIP AND NOT DEFINED FFMPEG_PREPARED_BINARIES)
+    # LizardByte's prebuilt FFmpeg releases don't include rkmpp/rga support, so a
+    # Rockchip-enabled FFmpeg build must be supplied via FFMPEG_PREPARED_BINARIES.
+    message(FATAL_ERROR "SUNSHINE_ENABLE_ROCKCHIP requires FFMPEG_PREPARED_BINARIES to point at a "
+                         "Rockchip (rkmpp/rga) enabled FFmpeg build; none was specified.")
+endif()
+
 if(NOT DEFINED FFMPEG_PREPARED_BINARIES)
     # Set platform-specific libraries
     if(WIN32)
@@ -137,7 +144,9 @@ else()
 
     # Set platform-specific libraries
     if(NOT DEFINED FFMPEG_PLATFORM_LIBRARIES)
-        if(WIN32)
+        if(SUNSHINE_ENABLE_ROCKCHIP)
+            set(FFMPEG_PLATFORM_LIBRARIES rockchip_mpp rga X11)
+        elseif(WIN32)
             set(FFMPEG_PLATFORM_LIBRARIES mfplat ole32 strmiids mfuuid vpl)
         elseif(FREEBSD)
             set(FFMPEG_PLATFORM_LIBRARIES va va-drm va-x11 X11)
