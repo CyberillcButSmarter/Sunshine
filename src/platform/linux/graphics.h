@@ -7,6 +7,7 @@
 // standard includes
 #include <optional>
 #include <string_view>
+#include <vector>
 
 // lib includes
 #include <glad/egl.h>
@@ -390,12 +391,25 @@ namespace egl {
    * @brief Create an EGLImage, falling back to the EGL_KHR_image_base extension entry
    * point on drivers that report EGL < 1.5 (where the core eglCreateImage symbol is
    * left unresolved even though DMA-BUF import via the KHR extension is supported).
+   *
+   * eglCreateImageKHR predates EGLAttrib and takes a 32-bit EGLint attribute list
+   * instead, so the (pointer-sized) EGLAttrib values are narrowed when falling back.
    */
-  inline EGLImage CreateImage(EGLDisplay dpy, EGLContext ctx, EGLenum target, EGLClientBuffer buffer, const EGLint *attrib_list) {
+  inline EGLImage CreateImage(EGLDisplay dpy, EGLContext ctx, EGLenum target, EGLClientBuffer buffer, const EGLAttrib *attrib_list) {
     if (eglCreateImage) {
       return eglCreateImage(dpy, ctx, target, buffer, attrib_list);
     }
-    return eglCreateImageKHR(dpy, ctx, target, buffer, attrib_list);
+
+    std::vector<EGLint> khr_attrib_list;
+    if (attrib_list) {
+      for (const EGLAttrib *it = attrib_list;; ++it) {
+        khr_attrib_list.push_back(static_cast<EGLint>(*it));
+        if (*it == EGL_NONE) {
+          break;
+        }
+      }
+    }
+    return eglCreateImageKHR(dpy, ctx, target, buffer, attrib_list ? khr_attrib_list.data() : nullptr);
   }
 
   /**
