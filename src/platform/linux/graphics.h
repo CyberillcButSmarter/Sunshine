@@ -387,6 +387,28 @@ namespace egl {
   using display_t = util::dyn_safe_ptr_v2<void, EGLBoolean, &eglTerminate>;
 
   /**
+   * @brief Create an EGLImage, falling back to the EGL_KHR_image_base extension entry
+   * point on drivers that report EGL < 1.5 (where the core eglCreateImage symbol is
+   * left unresolved even though DMA-BUF import via the KHR extension is supported).
+   */
+  inline EGLImage CreateImage(EGLDisplay dpy, EGLContext ctx, EGLenum target, EGLClientBuffer buffer, const EGLint *attrib_list) {
+    if (eglCreateImage) {
+      return eglCreateImage(dpy, ctx, target, buffer, attrib_list);
+    }
+    return eglCreateImageKHR(dpy, ctx, target, buffer, attrib_list);
+  }
+
+  /**
+   * @brief Destroy an EGLImage created by CreateImage(), using the matching entry point.
+   */
+  inline EGLBoolean DestroyImage(EGLDisplay dpy, EGLImage image) {
+    if (eglDestroyImage) {
+      return eglDestroyImage(dpy, image);
+    }
+    return eglDestroyImageKHR(dpy, image);
+  }
+
+  /**
    * @brief RGB capture image backed by EGL and OpenGL resources.
    */
   struct rgb_img_t {
@@ -433,31 +455,31 @@ namespace egl {
 #ifndef DOXYGEN
   KITTY_USING_MOVE_T(rgb_t, rgb_img_t, , {
     if (el.xrgb8) {
-      eglDestroyImage(el.display, el.xrgb8);
+      DestroyImage(el.display, el.xrgb8);
     }
   });
 
   KITTY_USING_MOVE_T(nv12_t, nv12_img_t, , {
     if (el.r8) {
-      eglDestroyImage(el.display, el.r8);
+      DestroyImage(el.display, el.r8);
     }
 
     if (el.bg88) {
-      eglDestroyImage(el.display, el.bg88);
+      DestroyImage(el.display, el.bg88);
     }
   });
 
   KITTY_USING_MOVE_T(yuv444_t, yuv444_img_t, , {
     if (el.r8) {
-      eglDestroyImage(el.display, el.r8);
+      DestroyImage(el.display, el.r8);
     }
 
     if (el.g8) {
-      eglDestroyImage(el.display, el.g8);
+      DestroyImage(el.display, el.g8);
     }
 
     if (el.b8) {
-      eglDestroyImage(el.display, el.b8);
+      DestroyImage(el.display, el.b8);
     }
   });
 

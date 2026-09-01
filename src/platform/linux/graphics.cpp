@@ -642,7 +642,7 @@ namespace egl {
 
     rgb_t rgb {
       egl_display,
-      eglCreateImage(egl_display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr, attribs.data()),
+      CreateImage(egl_display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr, attribs.data()),
       gl::tex_t::make(1)
     };
 
@@ -752,8 +752,8 @@ namespace egl {
 
     nv12_t nv12 {
       egl_display,
-      eglCreateImage(egl_display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr, y_attribs.data()),
-      eglCreateImage(egl_display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr, uv_attribs.data()),
+      CreateImage(egl_display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr, y_attribs.data()),
+      CreateImage(egl_display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr, uv_attribs.data()),
       gl::tex_t::make(2),
       gl::frame_buf_t::make(2),
       std::move(fds)
@@ -805,9 +805,9 @@ namespace egl {
 
     yuv444_t yuv444 {
       egl_display,
-      eglCreateImage(egl_display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr, y_attribs.data()),
-      eglCreateImage(egl_display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr, u_attribs.data()),
-      eglCreateImage(egl_display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr, v_attribs.data()),
+      CreateImage(egl_display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr, y_attribs.data()),
+      CreateImage(egl_display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr, u_attribs.data()),
+      CreateImage(egl_display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr, v_attribs.data()),
       gl::tex_t::make(3),
       gl::frame_buf_t::make(3),
       std::move(fds)
