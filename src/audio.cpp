@@ -214,7 +214,12 @@ namespace audio {
       ref->restore_sink = ref->sink.host != *sink;
       if (ref->restore_sink) {
         if (control->set_sink(*sink)) {
-          return;
+          // Switching the default sink is best-effort: some backends (e.g. older
+          // PipeWire pulse-compat shims) don't support it and always fail here.
+          // Fall back to capturing from whatever the current default sink's
+          // monitor is instead of losing audio for the whole stream.
+          BOOST_LOG(warning) << "Couldn't switch default audio sink to ["sv << *sink << "]. Continuing without switching sinks."sv;
+          ref->restore_sink = false;
         }
       }
     }
