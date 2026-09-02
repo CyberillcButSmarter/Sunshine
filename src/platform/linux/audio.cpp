@@ -582,7 +582,7 @@ namespace platf {
 
         alarm->wait();
         // No need to check status. If it failed just return default name.
-        BOOST_LOG(info) << "Found default monitor by name: "sv << monitor_name;
+        BOOST_LOG(info) << "Found monitor ["sv << monitor_name << "] for sink ["sv << sink_name << "]"sv;
         return monitor_name;
       }
 
@@ -629,6 +629,10 @@ namespace platf {
             sink_name = surround71_name;
           }
         }
+
+        BOOST_LOG(info) << "Capturing audio from sink ["sv << sink_name << "] (channels: "sv << channels
+                        << ", index.stereo: "sv << index.stereo << ", index.surround51: "sv << index.surround51
+                        << ", index.surround71: "sv << index.surround71 << ")"sv;
 
         return ::platf::microphone(mapping, channels, sample_rate, frame_size, get_monitor_name(sink_name));
       }
