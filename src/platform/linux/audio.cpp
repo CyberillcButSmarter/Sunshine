@@ -626,6 +626,14 @@ namespace platf {
       int set_sink(const std::string &sink) override {
         auto alarm = safe::make_alarm<int>();
 
+        // Remember the sink we asked for regardless of whether the backend
+        // accepts switching the system-wide default. Some backends (e.g.
+        // PipeWire's pulse-compat shim) never support SET_DEFAULT_SINK, but
+        // the sink (and its monitor source) still exists and can be
+        // captured from directly - and on systems with no real hardware
+        // sink at all, there may be no queryable "default" to fall back on.
+        requested_sink = sink;
+
         BOOST_LOG(info) << "Setting default sink to: ["sv << sink << "]"sv;
         op_t op {
           pa_context_set_default_sink(
@@ -647,8 +655,6 @@ namespace platf {
 
           return -1;
         }
-
-        requested_sink = sink;
 
         return 0;
       }
