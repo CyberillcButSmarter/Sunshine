@@ -296,6 +296,7 @@ namespace platf {
       loop_t loop;  ///< PulseAudio threaded mainloop instance.
       ctx_t ctx;  ///< PulseAudio threaded mainloop context.
       std::string requested_sink;  ///< Requested sink.
+      std::string move_target_sink;  ///< Sink new streams should be auto-moved onto, or empty for none.
 
       struct {
         std::uint32_t stereo = PA_INVALID_INDEX;
@@ -367,7 +368,79 @@ namespace platf {
           return -1;
         }
 
+        // Subscribe to new-stream notifications so newly-started playback
+        // can be moved onto move_target_sink as soon as it appears - this
+        // is what keeps audio flowing to our null sink on backends where
+        // pa_context_set_default_sink() is rejected (see set_sink()).
+        pa_context_set_subscribe_callback(ctx.get(), sink_input_subscribe_cb, this);
+
+        auto subscribe_alarm = safe::make_alarm<int>();
+        op_t subscribe_op {
+          pa_context_subscribe(ctx.get(), PA_SUBSCRIPTION_MASK_SINK_INPUT, success_cb, subscribe_alarm.get())
+        };
+        if (subscribe_op) {
+          subscribe_alarm->wait();
+        }
+
         return 0;
+      }
+
+      /**
+       * @brief Move a newly-appeared PulseAudio playback stream onto move_target_sink.
+       *
+       * @param c Native context object that emitted the subscription event.
+       * @param t Subscription event facility and type bitmask.
+       * @param idx Index of the sink-input the event applies to.
+       * @param userdata The server_t instance that registered this callback.
+       */
+      static void sink_input_subscribe_cb(ctx_t::pointer c, pa_subscription_event_type_t t, std::uint32_t idx, void *userdata) {
+        if ((t & PA_SUBSCRIPTION_EVENT_FACILITY_MASK) != PA_SUBSCRIPTION_EVENT_SINK_INPUT) {
+          return;
+        }
+
+        if ((t & PA_SUBSCRIPTION_EVENT_TYPE_MASK) != PA_SUBSCRIPTION_EVENT_NEW) {
+          return;
+        }
+
+        auto self = (server_t *) userdata;
+        if (self->move_target_sink.empty()) {
+          return;
+        }
+
+        op_t move_op {
+          pa_context_move_sink_input_by_name(c, idx, self->move_target_sink.c_str(), nullptr, nullptr)
+        };
+      }
+
+      /**
+       * @brief Move every currently-playing PulseAudio stream onto the named sink.
+       *
+       * Used alongside pa_context_set_default_sink(), which some backends
+       * (e.g. PipeWire's pulse-compat shim) never honor - moving individual
+       * streams works even when changing the system-wide default does not.
+       *
+       * @param sink Sink to move existing streams onto.
+       */
+      void move_existing_streams(const std::string &sink) {
+        auto alarm = safe::make_alarm<int>();
+
+        cb_t<pa_sink_input_info *> f = [&](ctx_t::pointer ctx, const pa_sink_input_info *info, int eol) {
+          if (!info) {
+            alarm->ring(0);
+            return;
+          }
+
+          op_t move_op {
+            pa_context_move_sink_input_by_name(ctx, info->index, sink.c_str(), nullptr, nullptr)
+          };
+        };
+
+        op_t op {pa_context_get_sink_input_info_list(ctx.get(), cb<pa_sink_input_info *>, &f)};
+        if (!op) {
+          return;
+        }
+
+        alarm->wait();
       }
 
       /**
@@ -669,6 +742,16 @@ namespace platf {
         // captured from directly - and on systems with no real hardware
         // sink at all, there may be no queryable "default" to fall back on.
         requested_sink = sink;
+
+        // Move whatever's currently playing onto this sink directly, and
+        // keep doing so for any new stream that starts (via
+        // sink_input_subscribe_cb). This is what actually gets audio
+        // flowing to our sink on backends where SET_DEFAULT_SINK below is
+        // rejected outright - PipeWire's pulse-compat shim doesn't support
+        // changing the system-wide default, but it does support moving
+        // individual streams between sinks.
+        move_target_sink = sink;
+        move_existing_streams(sink);
 
         BOOST_LOG(info) << "Setting default sink to: ["sv << sink << "]"sv;
         op_t op {
