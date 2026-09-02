@@ -647,19 +647,7 @@ namespace egl {
     };
 
     if (!rgb->xrgb8) {
-      char fourcc_chars[5] = {
-        (char) (xrgb.fourcc & 0xFF),
-        (char) ((xrgb.fourcc >> 8) & 0xFF),
-        (char) ((xrgb.fourcc >> 16) & 0xFF),
-        (char) ((xrgb.fourcc >> 24) & 0xFF),
-        0
-      };
       BOOST_LOG(error) << "Couldn't import RGB Image: "sv << util::hex(eglGetError()).to_string_view();
-      BOOST_LOG(error) << "  debug: fourcc=["sv << fourcc_chars << "] width="sv << xrgb.width << " height="sv << xrgb.height
-                        << " modifier=0x"sv << std::hex << xrgb.modifier << std::dec;
-      for (auto x = 0; x < 4; ++x) {
-        BOOST_LOG(error) << "  debug: plane["sv << x << "] fd="sv << xrgb.fds[x] << " offset="sv << xrgb.offsets[x] << " pitch="sv << xrgb.pitches[x];
-      }
 
       return std::nullopt;
     }
