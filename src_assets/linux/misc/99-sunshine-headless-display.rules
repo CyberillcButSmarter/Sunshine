@@ -1,0 +1,15 @@
+# Automatically force a DRM connector "connected" when this machine has no
+# display attached at all (no real monitor, no HDMI/DP dummy plug), so that
+# Sunshine's KMS screen-capture backend has an active output to grab from.
+#
+# This is opt-in: install this file only on headless boxes that need it. It
+# never overrides a real connected display - the helper script it runs
+# checks for that first and does nothing if anything is already connected.
+#
+# Install:
+#   sudo install -m 0755 sunshine-force-headless-display.sh /usr/local/sbin/
+#   sudo install -m 0644 99-sunshine-headless-display.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules
+#   sudo udevadm trigger --subsystem-match=drm
+
+ACTION=="add|change", SUBSYSTEM=="drm", KERNEL=="card*-*", RUN+="/usr/local/sbin/sunshine-force-headless-display.sh"

@@ -132,6 +132,41 @@ cmake -B build -G Ninja -S . \
 Once built, select the `rkmpp` encoder either in the web UI (Advanced tab) or by setting `encoder = rkmpp` in
 `sunshine.conf`.
 
+> [!NOTE]
+> KMS screen capture (used by `rkmpp`, `vaapi`, and `software`) needs a DRM connector reporting as **connected**.
+> On a board with a real monitor or an HDMI/DP dummy plug, this happens automatically. On a genuinely display-less
+> box, no capture backend will find a display to grab from at all, and Sunshine will fail to start with "Unable to
+> find display or encoder during startup". See the next section for an automatic, opt-in fix.
+
+##### Headless capture without a monitor or dummy plug
+
+If you don't have a monitor or an HDMI/DP dummy plug and don't want to buy one, `src_assets/linux/misc/` ships an
+optional udev rule + script that forces a DRM connector "connected" automatically at boot (and on every DRM hotplug
+event), but **only when nothing is actually connected** — a real monitor or dummy plug always takes priority, and the
+script does nothing if it finds one. This is not installed by default (most Sunshine users have a real display and
+don't need it); install it explicitly:
+
+```bash
+sudo install -m 0755 src_assets/linux/misc/sunshine-force-headless-display.sh /usr/local/sbin/
+sudo install -m 0644 src_assets/linux/misc/99-sunshine-headless-display.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules
+sudo udevadm trigger --subsystem-match=drm
+```
+
+That last command also forces a connector immediately, so you don't need to reboot to test it. Check with:
+
+```bash
+cat /sys/class/drm/card*-*/status
+```
+
+At least one connector should now read `connected`. This persists across reboots (it's a udev rule, re-applied at
+every boot) — no need to manually run `echo on > .../status` again.
+
+> [!NOTE]
+> The captured framebuffer will just be whatever your desktop session actually renders to that connector — if
+> nothing is logged in or rendering, expect a blank/black stream. This only solves "no display to capture from",
+> not "nothing is drawing content".
+
 #### macOS
 You can either use [Homebrew](https://brew.sh) or [MacPorts](https://www.macports.org) to install dependencies.
 
