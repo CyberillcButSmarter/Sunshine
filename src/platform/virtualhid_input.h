@@ -41,13 +41,14 @@ namespace platf::virtualhid {
     void refresh_keyboard();
 
     /**
-     * @brief Recreate the shared mouse using the runtime's current driver and license state.
+     * @brief Recreate the shared mouse (and absolute pointer device) using the runtime's current driver and license state.
      */
     void refresh_mouse();
 
     std::unique_ptr<lvh::Runtime> runtime;  ///< libvirtualhid runtime.
     std::unique_ptr<lvh::Keyboard> keyboard;  ///< Shared virtual keyboard.
     std::unique_ptr<lvh::Mouse> mouse;  ///< Shared virtual mouse.
+    std::unique_ptr<lvh::PenTablet> abs_pointer;  ///< Shared absolute-only pointer used for Remote Desktop-style absolute mouse positioning; see abs_mouse().
     std::vector<std::shared_ptr<struct gamepad_context_t>> gamepads {static_cast<std::size_t>(MAX_GAMEPADS)};  ///< Virtual gamepad slots.
   };
 

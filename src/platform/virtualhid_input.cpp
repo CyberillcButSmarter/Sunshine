@@ -476,6 +476,7 @@ namespace platf::virtualhid {
 
   void input_context_t::refresh_mouse() {
     mouse.reset();
+    abs_pointer.reset();
     if (!runtime || !runtime->capabilities().supports_mouse) {
       return;
     }
@@ -488,6 +489,32 @@ namespace platf::virtualhid {
       mouse = std::move(created.mouse);
     } else {
       log_failure("create libvirtualhid mouse"sv, created.status);
+    }
+
+    // Absolute pointer positioning (Moonlight's "Remote Desktop" input mode)
+    // is routed through a dedicated pen-tablet-profile device instead of
+    // Mouse::move_absolute(). On Linux, libvirtualhid's uinput backend
+    // advertises both relative (REL_X/REL_Y) and absolute (ABS_X/ABS_Y)
+    // capabilities on the single mouse device; libinput classifies any
+    // device with REL_X/REL_Y as a relative mouse and then discards ABS
+    // events sent to it ("Discarding absolute event from relative device.
+    // Please file a bug"), so absolute-mode input was silently dropped. A
+    // pen tablet is a genuinely absolute-only indirect pointer device - the
+    // same input class real graphics tablets use to move the system cursor
+    // - so it doesn't hit that classification conflict. Mouse button clicks
+    // still go through the regular mouse device (see button_mouse()); they
+    // carry no position, so they apply wherever this device last placed the
+    // cursor.
+    if (runtime->capabilities().supports_pen_tablet) {
+      lvh::CreatePenTabletOptions pointer_options;
+      pointer_options.profile = lvh::profiles::pen_tablet();
+      pointer_options.stable_id = "sunshine-abs-pointer";
+      auto pointer_created = runtime->create_pen_tablet(pointer_options);
+      if (pointer_created) {
+        abs_pointer = std::move(pointer_created.pen_tablet);
+      } else {
+        log_failure("create libvirtualhid absolute pointer"sv, pointer_created.status);
+      }
     }
   }
 
@@ -764,6 +791,17 @@ namespace platf::virtualhid {
   }
 
   void abs_mouse(input_context_t &context, const touch_port_t &touch_port, float x, float y) {
+    if (context.abs_pointer) {
+      lvh::PenToolState state;
+      state.tool = lvh::PenToolType::pen;
+      state.x = touch_port.width > 0 ? std::clamp(x / static_cast<float>(touch_port.width), 0.0F, 1.0F) : 0.0F;
+      state.y = touch_port.height > 0 ? std::clamp(y / static_cast<float>(touch_port.height), 0.0F, 1.0F) : 0.0F;
+      state.transition = lvh::PointerTransition::update;
+      state.viewport = pointer_viewport(touch_port);
+      log_failure("submit libvirtualhid absolute pointer movement"sv, context.abs_pointer->place_tool(state));
+      return;
+    }
+
     if (context.mouse) {
       log_failure(
         "submit libvirtualhid absolute mouse movement"sv,
