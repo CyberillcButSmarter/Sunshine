@@ -42,9 +42,10 @@ namespace platf {
    * @param name Human-readable name to assign.
    * @param mapping Opus channel mapping table for the requested layout.
    * @param channels Number of audio channels in the stream.
+   * @param priority Session/driver priority PipeWire's default-node policy should give this sink.
    * @return Value converted to string.
    */
-  std::string to_string(const char *name, const std::uint8_t *mapping, int channels) {
+  std::string to_string(const char *name, const std::uint8_t *mapping, int channels, int priority) {
     std::stringstream ss;
 
     ss << "rate=48000 sink_name="sv << name << " format=float channels="sv << channels << " channel_map="sv;
@@ -54,7 +55,19 @@ namespace platf {
 
     ss << pa_channel_position_to_string(position_mapping[mapping[channels - 1]]);
 
-    ss << " sink_properties=device.description="sv << name;
+    // priority.session/priority.driver are read directly by PipeWire's own
+    // default-node selection policy at node-creation time. Unlike
+    // pa_context_set_default_sink() or move_sink_input (both outright
+    // rejected by some pulse-compat backends, e.g. PipeWire's), this isn't a
+    // runtime command sent over that broken protocol path, so it still takes
+    // effect even there. Without it, on a system with no real hardware sink,
+    // WirePlumber tends to auto-select whichever of our null sinks has the
+    // most channels as the effective default - rarely the one an ordinary
+    // stereo app stream should land on. Quoted since the value embeds spaces.
+    ss << " sink_properties=\"device.description="sv << name
+       << " priority.session="sv << priority
+       << " priority.driver="sv << priority << "\""sv;
+
     auto result = ss.str();
 
     BOOST_LOG(debug) << "null-sink args: "sv << result;
@@ -491,16 +504,17 @@ namespace platf {
        * @param name Human-readable name to assign.
        * @param channel_mapping Channel mapping.
        * @param channels Number of audio channels in the stream.
+       * @param priority Session/driver priority PipeWire's default-node policy should give this sink.
        * @return PulseAudio module index for the new sink, or PA_INVALID_INDEX on failure.
        */
-      int load_null(const char *name, const std::uint8_t *channel_mapping, int channels) {
+      int load_null(const char *name, const std::uint8_t *channel_mapping, int channels, int priority) {
         auto alarm = safe::make_alarm<int>();
 
         op_t op {
           pa_context_load_module(
             ctx.get(),
             "module-null-sink",
-            to_string(name, channel_mapping, channels).c_str(),
+            to_string(name, channel_mapping, channels, priority).c_str(),
             cb_i,
             alarm.get()
           ),
@@ -599,8 +613,10 @@ namespace platf {
         auto sink_name = get_default_sink_name();
         sink.host = sink_name;
 
+        // Give stereo the highest priority since it's overwhelmingly the
+        // common case - see to_string() for why this matters.
         if (index.stereo == PA_INVALID_INDEX) {
-          index.stereo = load_null(stereo, speaker::map_stereo.data(), static_cast<int>(speaker::map_stereo.size()));
+          index.stereo = load_null(stereo, speaker::map_stereo.data(), static_cast<int>(speaker::map_stereo.size()), 2000);
           if (index.stereo == PA_INVALID_INDEX) {
             BOOST_LOG(warning) << "Couldn't create virtual sink for stereo: "sv << pa_strerror(pa_context_errno(ctx.get()));
           } else {
@@ -609,7 +625,7 @@ namespace platf {
         }
 
         if (index.surround51 == PA_INVALID_INDEX) {
-          index.surround51 = load_null(surround51, speaker::map_surround51.data(), static_cast<int>(speaker::map_surround51.size()));
+          index.surround51 = load_null(surround51, speaker::map_surround51.data(), static_cast<int>(speaker::map_surround51.size()), 1000);
           if (index.surround51 == PA_INVALID_INDEX) {
             BOOST_LOG(warning) << "Couldn't create virtual sink for surround-51: "sv << pa_strerror(pa_context_errno(ctx.get()));
           } else {
@@ -618,7 +634,7 @@ namespace platf {
         }
 
         if (index.surround71 == PA_INVALID_INDEX) {
-          index.surround71 = load_null(surround71, speaker::map_surround71.data(), static_cast<int>(speaker::map_surround71.size()));
+          index.surround71 = load_null(surround71, speaker::map_surround71.data(), static_cast<int>(speaker::map_surround71.size()), 900);
           if (index.surround71 == PA_INVALID_INDEX) {
             BOOST_LOG(warning) << "Couldn't create virtual sink for surround-71: "sv << pa_strerror(pa_context_errno(ctx.get()));
           } else {
