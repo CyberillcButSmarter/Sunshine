@@ -546,6 +546,17 @@ namespace platf {
         op_t server_op {pa_context_get_server_info(ctx.get(), cb<pa_server_info *>, &server_f)};
         alarm->wait();
         // No need to check status. If it failed just return default name.
+
+        // Real PulseAudio can report the literal alias "@DEFAULT_SINK@" here,
+        // which callers are meant to hand back to sink-lookup calls and have
+        // the server resolve to the real current default. PipeWire's
+        // pulse-compat shim reports this same alias but doesn't resolve it
+        // on lookup, so treat it as "no usable name" here rather than
+        // handing an unresolvable placeholder to the caller.
+        if (sink_name == "@DEFAULT_SINK@"sv) {
+          return {};
+        }
+
         return sink_name;
       }
 
