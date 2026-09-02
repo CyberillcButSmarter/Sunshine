@@ -289,6 +289,10 @@ namespace platf {
       };
 
     public:
+      static constexpr auto stereo_name = "sink-sunshine-stereo";  ///< Name of the Sunshine-created stereo null sink.
+      static constexpr auto surround51_name = "sink-sunshine-surround51";  ///< Name of the Sunshine-created 5.1 null sink.
+      static constexpr auto surround71_name = "sink-sunshine-surround71";  ///< Name of the Sunshine-created 7.1 null sink.
+
       loop_t loop;  ///< PulseAudio threaded mainloop instance.
       ctx_t ctx;  ///< PulseAudio threaded mainloop context.
       std::string requested_sink;  ///< Requested sink.
@@ -424,9 +428,9 @@ namespace platf {
        * @return Host and virtual sink names when the backend can report them.
        */
       std::optional<sink_t> sink_info() override {
-        constexpr auto stereo = "sink-sunshine-stereo";
-        constexpr auto surround51 = "sink-sunshine-surround51";
-        constexpr auto surround71 = "sink-sunshine-surround71";
+        constexpr auto stereo = stereo_name;
+        constexpr auto surround51 = surround51_name;
+        constexpr auto surround71 = surround71_name;
 
         auto alarm = safe::make_alarm<int>();
 
@@ -607,6 +611,23 @@ namespace platf {
         }
         if (sink_name.empty()) {
           sink_name = get_default_sink_name();
+        }
+
+        // The "default sink" query above is unreliable on some backends (e.g.
+        // PipeWire's pulse-compat shim, especially on systems with no real
+        // hardware sink to report as default) and can return an empty name
+        // even when it just succeeded moments earlier. Rather than handing
+        // pa_simple_new() an empty source name and losing audio entirely,
+        // fall back directly to whichever of our own null sinks matches the
+        // requested channel layout, if it exists.
+        if (sink_name.empty()) {
+          if (channels == 2 && index.stereo != PA_INVALID_INDEX) {
+            sink_name = stereo_name;
+          } else if (channels == 6 && index.surround51 != PA_INVALID_INDEX) {
+            sink_name = surround51_name;
+          } else if (channels == 8 && index.surround71 != PA_INVALID_INDEX) {
+            sink_name = surround71_name;
+          }
         }
 
         return ::platf::microphone(mapping, channels, sample_rate, frame_size, get_monitor_name(sink_name));
