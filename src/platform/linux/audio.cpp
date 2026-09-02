@@ -386,6 +386,32 @@ namespace platf {
       }
 
       /**
+       * @brief Context passed through to move_sink_input_result_cb, owned by the callback.
+       */
+      struct move_result_ctx_t {
+        std::uint32_t sink_input_index;  ///< Index of the sink-input that was asked to move.
+        std::string target_sink;  ///< Sink the move was targeting.
+      };
+
+      /**
+       * @brief Log whether a move_sink_input request actually succeeded.
+       *
+       * @param ctx Native context object that emitted the callback.
+       * @param success Nonzero if the move succeeded.
+       * @param userdata Heap-allocated move_result_ctx_t, freed here.
+       */
+      static void move_sink_input_result_cb(ctx_t::pointer ctx, int success, void *userdata) {
+        std::unique_ptr<move_result_ctx_t> move_ctx {(move_result_ctx_t *) userdata};
+
+        if (success) {
+          BOOST_LOG(info) << "Moved sink-input ["sv << move_ctx->sink_input_index << "] to sink ["sv << move_ctx->target_sink << "]"sv;
+        } else {
+          BOOST_LOG(warning) << "Couldn't move sink-input ["sv << move_ctx->sink_input_index << "] to sink ["sv
+                              << move_ctx->target_sink << "]: "sv << pa_strerror(pa_context_errno(ctx));
+        }
+      }
+
+      /**
        * @brief Move a newly-appeared PulseAudio playback stream onto move_target_sink.
        *
        * @param c Native context object that emitted the subscription event.
@@ -407,9 +433,15 @@ namespace platf {
           return;
         }
 
+        BOOST_LOG(info) << "New sink-input ["sv << idx << "] appeared, moving to ["sv << self->move_target_sink << "]"sv;
+
+        auto move_ctx = std::make_unique<move_result_ctx_t>(move_result_ctx_t {idx, self->move_target_sink});
         op_t move_op {
-          pa_context_move_sink_input_by_name(c, idx, self->move_target_sink.c_str(), nullptr, nullptr)
+          pa_context_move_sink_input_by_name(c, idx, self->move_target_sink.c_str(), move_sink_input_result_cb, move_ctx.get())
         };
+        if (move_op) {
+          move_ctx.release();  // ownership transferred to move_sink_input_result_cb
+        }
       }
 
       /**
@@ -423,6 +455,7 @@ namespace platf {
        */
       void move_existing_streams(const std::string &sink) {
         auto alarm = safe::make_alarm<int>();
+        int found = 0;
 
         cb_t<pa_sink_input_info *> f = [&](ctx_t::pointer ctx, const pa_sink_input_info *info, int eol) {
           if (!info) {
@@ -430,9 +463,17 @@ namespace platf {
             return;
           }
 
+          ++found;
+          BOOST_LOG(info) << "Moving existing sink-input ["sv << info->index << "] ("sv << info->name
+                           << ") to ["sv << sink << "]"sv;
+
+          auto move_ctx = std::make_unique<move_result_ctx_t>(move_result_ctx_t {info->index, sink});
           op_t move_op {
-            pa_context_move_sink_input_by_name(ctx, info->index, sink.c_str(), nullptr, nullptr)
+            pa_context_move_sink_input_by_name(ctx, info->index, sink.c_str(), move_sink_input_result_cb, move_ctx.get())
           };
+          if (move_op) {
+            move_ctx.release();  // ownership transferred to move_sink_input_result_cb
+          }
         };
 
         op_t op {pa_context_get_sink_input_info_list(ctx.get(), cb<pa_sink_input_info *>, &f)};
@@ -441,6 +482,7 @@ namespace platf {
         }
 
         alarm->wait();
+        BOOST_LOG(info) << "Found "sv << found << " existing sink-input(s) to move to ["sv << sink << "]"sv;
       }
 
       /**
