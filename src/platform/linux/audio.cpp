@@ -457,19 +457,19 @@ namespace platf {
         auto alarm = safe::make_alarm<int>();
         int found = 0;
 
-        cb_t<pa_sink_input_info *> f = [&](ctx_t::pointer ctx, const pa_sink_input_info *info, int eol) {
-          if (!info) {
+        cb_t<pa_sink_input_info *> f = [&](ctx_t::pointer ctx, const pa_sink_input_info *sink_input, int eol) {
+          if (!sink_input) {
             alarm->ring(0);
             return;
           }
 
           ++found;
-          BOOST_LOG(info) << "Moving existing sink-input ["sv << info->index << "] ("sv << info->name
+          BOOST_LOG(info) << "Moving existing sink-input ["sv << sink_input->index << "] ("sv << sink_input->name
                            << ") to ["sv << sink << "]"sv;
 
-          auto move_ctx = std::make_unique<move_result_ctx_t>(move_result_ctx_t {info->index, sink});
+          auto move_ctx = std::make_unique<move_result_ctx_t>(move_result_ctx_t {sink_input->index, sink});
           op_t move_op {
-            pa_context_move_sink_input_by_name(ctx, info->index, sink.c_str(), move_sink_input_result_cb, move_ctx.get())
+            pa_context_move_sink_input_by_name(ctx, sink_input->index, sink.c_str(), move_sink_input_result_cb, move_ctx.get())
           };
           if (move_op) {
             move_ctx.release();  // ownership transferred to move_sink_input_result_cb
